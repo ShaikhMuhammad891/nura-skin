@@ -17,6 +17,8 @@ export const metadata: Metadata = {
 
 /** All products (docs/15 P2). */
 export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
+  // Read the request first: catalogue queries must never run during `next build` (no DB in CI).
+  const params = await searchParams;
   const [catalogue, concerns] = await Promise.all([getCatalogue(), getConcerns()]);
   return (
     <Section className="pt-8 lg:pt-12">
@@ -36,7 +38,7 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
         <ProductListing
           catalogue={catalogue}
           concerns={concerns}
-          searchParams={await searchParams}
+          searchParams={params}
           basePath="/shop"
           scope={{}}
         />

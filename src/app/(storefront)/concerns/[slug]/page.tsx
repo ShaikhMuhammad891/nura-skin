@@ -13,7 +13,7 @@ import {
   getIngredients,
 } from "@/features/catalog/server/queries";
 
-/** Real 404s need a blocking render (docs/15 P8). */
+/** Unknown slugs get real 404s from the proxy catalogue gate (ADR-0020). */
 export const instant = false;
 
 export async function generateMetadata({

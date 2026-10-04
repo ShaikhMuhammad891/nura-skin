@@ -1,4 +1,4 @@
-# ADR-0020: Storefront rendering, status codes and the in-memory catalogue
+# ADR-0020: Storefront rendering, proxy status gate and the in-memory catalogue
 
 - **Status:** Accepted · **Date:** 2026-10-04 · **Refs:** 06 §3.1, 15 §1/§8, 16 §5, NFR-SCALE-06
 
@@ -17,9 +17,15 @@ M3 builds the catalogue storefront under Cache Components. Three constraints col
   `catalog`, `product:<slug>`, …, `cacheLife("hours")`), always reached at **request time**:
   pages await `params`/`searchParams` or call `connection()`, and the home page streams its
   merchandised sections inside `<Suspense>`. The build never touches the DB.
-- **No segment-wide `loading.tsx`** in `(storefront)`. Detail pages render blocking
-  (`instant = false`), so unknown slugs return a real **404** and moved slugs a real **308**.
-  Streaming is opted into locally with `<Suspense>` (e.g. live stock on the PDP).
+- **Status codes are decided in the proxy**, as the Next 16 docs prescribe for Cache Components
+  (every dynamic route streams a static shell first, so a page can't change its status).
+  `lib/catalog-gate.ts` (pure, unit-tested) maps `/products|routines|shop|ingredients|concerns|legal/<slug>`
+  to allow / **404** / **410** / **308** using a slug-only index (`lib/server/slug-index.ts`: five
+  queries over a 2-connection `pg` pool, cached 60 s per instance, fails open). 410 responses
+  carry the static `/discontinued` page as their body (Next ignores custom statuses on rewrites;
+  that route bypasses Clerk so the proxy can fetch it). In-page `notFound()` stays as the fallback.
+- **No segment-wide `loading.tsx`** in `(storefront)`; streaming is opted into locally with
+  `<Suspense>` (e.g. live stock on the PDP).
 - **Filtering, faceting and sorting run in memory** over the cached catalogue
   (`features/catalog/filters.ts`, pure and unit-tested), like the finder loader. Facet links are
   plain `nofollow` links; the URL is the state (works without JavaScript).
@@ -28,8 +34,8 @@ M3 builds the catalogue storefront under Cache Components. Three constraints col
 ## Consequences
 
 - ✅ Correct HTTP semantics for SEO, a DB-free build, fast cached pages, trivial facet logic.
-- ⚠️ Archived products render the ER2 "discontinued" page with `noindex` but status 200; a true
-  410 needs a proxy-side lookup (e.g. an Edge Config list of retired slugs). Follow-up.
+- ⚠️ A newly published or retired slug is reflected by the gate within 60 s (per-instance TTL).
+- ⚠️ The proxy needs `DATABASE_URL`; if the DB is unreachable it fails open (soft 404s).
 - ⚠️ Revisit in-memory filtering past a few hundred products (move to SQL with the same
   `ProductFilters` contract).
 - ⚠️ Client navigations into blocking pages have no generic skeleton; add per-route

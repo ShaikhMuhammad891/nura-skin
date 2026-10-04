@@ -79,6 +79,9 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://nura:nura@localhost:5433/nura_dev
+      DIRECT_URL: postgresql://nura:nura@localhost:5433/nura_dev
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -86,8 +89,23 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      # Browser requests go through Clerk's middleware: placeholder keys make every page fail.
+      - name: Require Clerk development keys
+        run: |
+          if [ "$CLERK_SECRET_KEY" = "sk_test_ci_placeholder" ]; then
+            echo "::error::Add the CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY repository secrets (Clerk development instance) to run E2E."
+            exit 1
+          fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium webkit
+      # The storefront reads the catalogue at request time: give the app a migrated, seeded database
+      # (embedded Postgres, same as local dev). The build itself still never connects.
+      - name: Start database, migrate and seed
+        run: |
+          nohup pnpm db:local > db-local.log 2>&1 &
+          timeout 180 bash -c 'until grep -q "Local Postgres ready" db-local.log; do sleep 2; done' || (cat db-local.log; exit 1)
+          pnpm db:deploy
+          pnpm db:seed
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()

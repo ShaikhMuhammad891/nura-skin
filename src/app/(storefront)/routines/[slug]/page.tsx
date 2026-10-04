@@ -18,7 +18,7 @@ import { getProduct, getReviews } from "@/features/catalog/server/queries";
 import type { BundleStepDTO } from "@/features/catalog/types";
 import { formatMoney } from "@/features/pricing/money";
 
-/** Real 404s need a blocking render (docs/15 P7). */
+/** Unknown slugs get real 404s from the proxy catalogue gate (ADR-0020). */
 export const instant = false;
 
 export async function generateMetadata({

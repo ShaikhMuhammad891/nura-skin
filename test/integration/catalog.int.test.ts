@@ -1,4 +1,5 @@
 /** Catalogue reads and search against the seeded database (docs/09 §4, docs/19 M3). */
+import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { listProducts, parseFilters } from "../../src/features/catalog/filters";
@@ -13,6 +14,8 @@ import {
   loadReviews,
 } from "../../src/features/catalog/server/service";
 import type { PrismaClient } from "../../src/generated/prisma/client";
+import { catalogDecision } from "../../src/lib/catalog-gate";
+import { loadSlugIndex } from "../../src/lib/server/slug-index";
 import { BUNDLES, PRODUCTS } from "../../prisma/seed/data/catalog";
 
 import { uid } from "./factories";
@@ -158,5 +161,46 @@ describe("search", () => {
     expect(await searchCatalog(prisma, "a")).toMatchObject({ products: [], ingredients: [] });
     await expect(searchCatalog(prisma, "'); DROP TABLE products; --")).resolves.toBeDefined();
     await expect(searchCatalog(prisma, "100%_\\")).resolves.toBeDefined();
+  });
+});
+
+describe("proxy slug index", () => {
+  it("classifies live, routine, retired and draft slugs from the real schema", async () => {
+    const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
+    try {
+      const category = await prisma.category.findFirstOrThrow({ where: { slug: "serums" } });
+      const retiredSlug = `retired-${uid()}`;
+      const draftSlug = `draft-${uid()}`;
+      for (const [slug, status] of [
+        [retiredSlug, "ARCHIVED"],
+        [draftSlug, "DRAFT"],
+      ] as const) {
+        await prisma.product.create({
+          data: {
+            slug,
+            name: slug,
+            categoryId: category.id,
+            shortDescription: "x",
+            description: "x",
+            howToUse: "x",
+            routineSlot: "TREAT",
+            status,
+          },
+        });
+      }
+      const index = { ...(await loadSlugIndex(pool)), legal: new Set<string>() };
+      const decide = (p: string) => catalogDecision(p, index).kind;
+
+      expect(decide("/products/clear-serum")).toBe("allow");
+      expect(decide("/routines/glow-routine")).toBe("allow");
+      expect(decide("/products/glow-routine")).toBe("redirect");
+      expect(decide(`/products/${retiredSlug}`)).toBe("gone");
+      expect(decide(`/products/${draftSlug}`)).toBe("not-found");
+      expect(decide("/shop/serums")).toBe("allow");
+      expect(decide("/ingredients/niacinamide")).toBe("allow");
+      expect(decide("/concerns/acne")).toBe("allow");
+    } finally {
+      await pool.end();
+    }
   });
 });

@@ -31,7 +31,7 @@ import {
   getSlugRedirect,
 } from "@/features/catalog/server/queries";
 
-/** Real 404s/redirects need a blocking render (docs/15 P5). Content is cached; stock streams. */
+/** Unknown slugs get real 404/410/308 from the proxy catalogue gate (ADR-0020). Stock streams. */
 export const instant = false;
 
 export async function generateMetadata({

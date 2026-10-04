@@ -10,7 +10,7 @@ import { ProductGrid } from "@/features/catalog/components/product-card";
 import { formatConcentration } from "@/features/catalog/merchandising";
 import { getCatalogue, getIngredient, getSlugRedirect } from "@/features/catalog/server/queries";
 
-/** Real 404s/redirects need a blocking render (docs/15 P10). */
+/** Unknown slugs get real 404s from the proxy catalogue gate (ADR-0020). */
 export const instant = false;
 
 const EVIDENCE = ["", "Limited evidence", "Good evidence", "Strong clinical evidence"] as const;
