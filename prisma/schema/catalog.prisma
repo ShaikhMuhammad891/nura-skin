@@ -1,0 +1,266 @@
+// Catalogue: the finder's knowledge base (08 §4.2, 12 §5).
+
+model Category {
+  id              String       @id @default(cuid(2))
+  slug            String       @unique
+  name            String
+  description     String?
+  routineSlot     RoutineSlot? @map("routine_slot")
+  position        Int          @default(0)
+  heroImageKey    String?      @map("hero_image_key")
+  seoTitle        String?      @map("seo_title")
+  seoDescription  String?      @map("seo_description")
+  archivedAt      DateTime?    @map("archived_at") @db.Timestamptz(3)
+  products        Product[]
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("categories")
+}
+
+model Product {
+  id               String                   @id @default(cuid(2))
+  slug             String                   @unique
+  name             String
+  subtitle         String?
+  type             ProductType              @default(SINGLE)
+  status           ProductStatus            @default(DRAFT)
+  categoryId       String                   @map("category_id")
+  category         Category                 @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  shortDescription String                   @map("short_description")
+  description      String                   @db.Text
+  howToUse         String                   @map("how_to_use") @db.Text
+  routineSlot      RoutineSlot?             @map("routine_slot")
+  timeOfDay        TimeOfDay                @default(BOTH) @map("time_of_day")
+  skinTypes        SkinType[]               @map("skin_types")
+  /// Free-form texture tags used by the finder's texture/climate fit (gel, cream, balm, fluid…).
+  textures         String[]
+  pregnancySafe    Boolean                  @default(false) @map("pregnancy_safe")
+  fragranceFree    Boolean                  @default(false) @map("fragrance_free")
+  vegan            Boolean                  @default(false)
+  nonComedogenic   Boolean                  @default(false) @map("non_comedogenic")
+  strengthLevel    Int                      @default(1) @map("strength_level")
+  isFeatured       Boolean                  @default(false) @map("is_featured")
+  featuredPosition Int?                     @map("featured_position")
+  badges           String[]
+  ratingAvg        Decimal                  @default(0) @map("rating_avg") @db.Decimal(3, 2)
+  ratingCount      Int                      @default(0) @map("rating_count")
+  unitsSold30d     Int                      @default(0) @map("units_sold_30d")
+  seoTitle         String?                  @map("seo_title")
+  seoDescription   String?                  @map("seo_description")
+  /// Maintained by trigger (name A, subtitle B, ingredient names C). Queried via raw SQL.
+  searchVector     Unsupported("tsvector")? @map("search_vector")
+  publishedAt      DateTime?                @map("published_at") @db.Timestamptz(3)
+  archivedAt       DateTime?                @map("archived_at") @db.Timestamptz(3)
+  version          Int                      @default(0)
+  createdById      String?                  @map("created_by_id")
+  updatedById      String?                  @map("updated_by_id")
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  variants      ProductVariant[]
+  images        ProductImage[]
+  ingredients   ProductIngredient[]
+  concerns      ProductConcern[]
+  bundleItems   BundleItem[]
+  reviews       Review[]
+  wishlistItems WishlistItem[]
+  orderItems    OrderItem[]
+  routineSteps  RoutineStep[]
+  supportCases  SupportCase[]
+
+  @@index([status, categoryId])
+  @@index([status, isFeatured, featuredPosition])
+  @@index([status, unitsSold30d(sort: Desc)])
+  @@index([status, ratingAvg(sort: Desc)])
+  @@index([skinTypes], type: Gin)
+  // Declared so Prisma tracks them (created in the init migration's hand-edited section).
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_name_trgm")
+  @@index([searchVector], type: Gin, map: "products_search_vector")
+  @@map("products")
+}
+
+model ProductVariant {
+  id                   String    @id @default(cuid(2))
+  productId            String    @map("product_id")
+  product              Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku                  String    @unique
+  name                 String
+  optionType           String    @map("option_type")
+  sizeMl               Int?      @map("size_ml")
+  shadeHex             String?   @map("shade_hex")
+  priceCents           Int       @map("price_cents")
+  compareAtPriceCents  Int?      @map("compare_at_price_cents")
+  costCents            Int?      @map("cost_cents")
+  subscriptionEligible Boolean   @default(true) @map("subscription_eligible")
+  replenishDays        Int       @default(56) @map("replenish_days")
+  weightGrams          Int       @map("weight_grams")
+  barcode              String?
+  position             Int       @default(0)
+  isDefault            Boolean   @default(false) @map("is_default")
+  archivedAt           DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  inventory          InventoryItem?
+  reservations       InventoryReservation[]
+  images             ProductImage[]
+  stripePrices       StripePrice[]
+  bundleItems        BundleItem[]
+  cartItems          CartItem[]
+  wishlistItems      WishlistItem[]
+  orderItems         OrderItem[]
+  subscriptionItems  SubscriptionItem[]
+  routineSteps       RoutineStep[]
+  backInStock        BackInStockRequest[]
+
+  @@index([productId, position])
+  @@map("product_variants")
+}
+
+model ProductImage {
+  id          String          @id @default(cuid(2))
+  productId   String          @map("product_id")
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId   String?         @map("variant_id")
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  /// Cloudinary public ID, never a URL (ADR-0010).
+  publicId    String          @map("public_id")
+  width       Int
+  height      Int
+  alt         String
+  blurDataUrl String?         @map("blur_data_url") @db.Text
+  kind        String
+  position    Int             @default(0)
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([productId, position])
+  @@map("product_images")
+}
+
+model Ingredient {
+  id               String    @id @default(cuid(2))
+  slug             String    @unique
+  inciName         String    @unique @map("inci_name") @db.Citext
+  commonName       String    @map("common_name")
+  aliases          String[]
+  category         String
+  isActive         Boolean   @default(false) @map("is_active")
+  description      String?   @db.Text
+  benefits         String[]
+  cautions         String?   @db.Text
+  /// null = unknown → treated as NOT pregnancy-safe by the engine (12 §4.3).
+  pregnancySafe    Boolean?  @map("pregnancy_safe")
+  isFragrance      Boolean   @default(false) @map("is_fragrance")
+  isAnimalDerived  Boolean   @default(false) @map("is_animal_derived")
+  irritancyLevel   Int       @default(0) @map("irritancy_level")
+  imageKey         String?   @map("image_key")
+  status           String    @default("PUBLISHED")
+  archivedAt       DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  products    ProductIngredient[]
+  concerns    IngredientConcern[]
+  conflictsA  IngredientConflict[] @relation("ConflictA")
+  conflictsB  IngredientConflict[] @relation("ConflictB")
+
+  @@index([aliases], type: Gin)
+  @@index([commonName(ops: raw("gin_trgm_ops"))], type: Gin, map: "ingredients_common_trgm")
+  @@map("ingredients")
+}
+
+model ProductIngredient {
+  productId       String     @map("product_id")
+  product         Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ingredientId    String     @map("ingredient_id")
+  ingredient      Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  position        Int
+  isKeyActive     Boolean    @default(false) @map("is_key_active")
+  /// Basis points (1000 = 10%).
+  concentrationBp Int?       @map("concentration_bp")
+
+  @@id([productId, ingredientId])
+  @@index([ingredientId])
+  @@index([productId, position])
+  @@map("product_ingredients")
+}
+
+/// Stored once per unordered pair; CHECK ingredient_a_id < ingredient_b_id.
+model IngredientConflict {
+  id            String     @id @default(cuid(2))
+  ingredientAId String     @map("ingredient_a_id")
+  ingredientA   Ingredient @relation("ConflictA", fields: [ingredientAId], references: [id], onDelete: Cascade)
+  ingredientBId String     @map("ingredient_b_id")
+  ingredientB   Ingredient @relation("ConflictB", fields: [ingredientBId], references: [id], onDelete: Cascade)
+  /// avoid_same_routine | avoid_same_day | caution
+  severity      String
+  reason        String
+
+  @@unique([ingredientAId, ingredientBId])
+  @@map("ingredient_conflicts")
+}
+
+model Concern {
+  id          String              @id @default(cuid(2))
+  slug        String              @unique
+  name        String
+  description String              @db.Text
+  iconKey     String              @map("icon_key")
+  position    Int                 @default(0)
+  products    ProductConcern[]
+  ingredients IngredientConcern[]
+
+  @@map("concerns")
+}
+
+model ProductConcern {
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  concernId String  @map("concern_id")
+  concern   Concern @relation(fields: [concernId], references: [id], onDelete: Cascade)
+  /// 1–3
+  efficacy  Int
+
+  @@id([productId, concernId])
+  @@index([concernId, efficacy(sort: Desc)])
+  @@map("product_concerns")
+}
+
+model IngredientConcern {
+  ingredientId   String     @map("ingredient_id")
+  ingredient     Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  concernId      String     @map("concern_id")
+  concern        Concern    @relation(fields: [concernId], references: [id], onDelete: Cascade)
+  /// 1 limited – 3 strong clinical evidence
+  evidence       Int
+  minEffectiveBp Int?       @map("min_effective_bp")
+
+  @@id([ingredientId, concernId])
+  @@map("ingredient_concerns")
+}
+
+model BundleItem {
+  id              String         @id @default(cuid(2))
+  bundleProductId String         @map("bundle_product_id")
+  bundleProduct   Product        @relation(fields: [bundleProductId], references: [id], onDelete: Cascade)
+  variantId       String         @map("variant_id")
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  quantity        Int            @default(1)
+  timeOfDay       TimeOfDay      @map("time_of_day")
+  stepOrder       Int            @map("step_order")
+
+  @@unique([bundleProductId, variantId])
+  @@map("bundle_items")
+}
+
+model SlugRedirect {
+  id         String   @id @default(cuid(2))
+  entityType String   @map("entity_type")
+  fromSlug   String   @map("from_slug")
+  toSlug     String   @map("to_slug")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([entityType, fromSlug])
+  @@map("slug_redirects")
+}

@@ -1,0 +1,106 @@
+// Audit, outbox, email, tokens, newsletter, settings (08 §4.13).
+
+/// Append-only: UPDATE/DELETE rejected by trigger. Actor is a soft reference.
+model AuditLog {
+  id         String                 @id @default(cuid(2))
+  actorId    String?                @map("actor_id")
+  actorRole  RoleKey?               @map("actor_role")
+  action     String
+  entityType String                 @map("entity_type")
+  entityId   String                 @map("entity_id")
+  before     Json?
+  after      Json?
+  metadata   Json?
+  ip         String?                @db.Inet
+  userAgent  String?                @map("user_agent")
+  requestId  String?                @map("request_id")
+  createdAt  DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model OutboxEvent {
+  id           String       @id @default(cuid(2))
+  name         String
+  payload      Json
+  status       OutboxStatus @default(PENDING)
+  attempts     Int          @default(0)
+  availableAt  DateTime     @default(now()) @map("available_at") @db.Timestamptz(3)
+  dispatchedAt DateTime?    @map("dispatched_at") @db.Timestamptz(3)
+  lastError    String?      @map("last_error") @db.Text
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
+}
+
+model EmailLog {
+  id                String   @id @default(cuid(2))
+  template          String
+  /// SHA-256 of the lowercased address; raw emails are not logged.
+  toHash            String   @map("to_hash")
+  userId            String?  @map("user_id")
+  entityType        String?  @map("entity_type")
+  entityId          String?  @map("entity_id")
+  idempotencyKey    String   @unique @map("idempotency_key")
+  providerMessageId String?  @map("provider_message_id")
+  status            String
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@map("email_logs")
+}
+
+model SignedActionToken {
+  id        String    @id @default(cuid(2))
+  /// SHA-256 of the random token; the raw token only exists in the email/link.
+  tokenHash String    @unique @map("token_hash")
+  action    String
+  subjectId String    @map("subject_id")
+  userId    String?   @map("user_id")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@map("signed_action_tokens")
+}
+
+model NewsletterSubscriber {
+  id               String    @id @default(cuid(2))
+  email            String    @unique @db.Citext
+  /// pending | confirmed | unsubscribed
+  status           String    @default("pending")
+  source           String?
+  confirmTokenHash String?   @map("confirm_token_hash")
+  confirmedAt      DateTime? @map("confirmed_at") @db.Timestamptz(3)
+  unsubscribedAt   DateTime? @map("unsubscribed_at") @db.Timestamptz(3)
+  welcomeCouponId  String?   @map("welcome_coupon_id")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("newsletter_subscribers")
+}
+
+model BackInStockRequest {
+  id         String         @id @default(cuid(2))
+  variantId  String         @map("variant_id")
+  variant    ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  email      String         @db.Citext
+  notifiedAt DateTime?      @map("notified_at") @db.Timestamptz(3)
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([variantId, email])
+  @@map("back_in_stock_requests")
+}
+
+model StoreSetting {
+  key         String   @id
+  value       Json
+  updatedById String?  @map("updated_by_id")
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("store_settings")
+}

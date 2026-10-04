@@ -1,0 +1,9 @@
+# Dependencies allowed to run install scripts (pnpm blocks all others by default: supply-chain hardening).
+allowBuilds:
+  "@embedded-postgres/windows-x64": true # local Postgres binary (dev/test only)
+  "@embedded-postgres/linux-x64": true # same, for CI runners
+  "@embedded-postgres/darwin-arm64": true # same, for Apple Silicon contributors
+  "@prisma/engines": true # downloads the Prisma schema/migration engines
+  esbuild: true # native binary used by tsx and vitest
+  prisma: true # Prisma CLI postinstall
+  unrs-resolver: true # native resolver used by eslint-config-next's import plugin

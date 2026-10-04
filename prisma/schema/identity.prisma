@@ -1,0 +1,134 @@
+// Identity & customers (08 §4.1). Actor/audit references elsewhere are soft IDs (no FK) so
+// history stays immutable and user anonymization is never blocked.
+
+model Role {
+  id          String   @id @default(cuid(2))
+  key         RoleKey  @unique
+  name        String
+  description String?
+  users       User[]
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("roles")
+}
+
+model User {
+  id                     String    @id @default(cuid(2))
+  clerkId                String    @unique @map("clerk_id")
+  email                  String    @unique @db.Citext
+  firstName              String?   @map("first_name")
+  lastName               String?   @map("last_name")
+  phone                  String?
+  roleId                 String    @map("role_id")
+  role                   Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  stripeCustomerId       String?   @unique @map("stripe_customer_id")
+  /// Denormalized convenience; ConsentRecord is the source of truth (review R-15).
+  marketingConsent       Boolean   @default(false) @map("marketing_consent")
+  marketingConsentAt     DateTime? @map("marketing_consent_at") @db.Timestamptz(3)
+  sensitiveDataConsentAt DateTime? @map("sensitive_data_consent_at") @db.Timestamptz(3)
+  /// Seeded synthetic data; the only customers visible to DEMO_STAFF (ADR-0016).
+  isDemo                 Boolean   @default(false) @map("is_demo")
+  lastSeenAt             DateTime? @map("last_seen_at") @db.Timestamptz(3)
+  deletedAt              DateTime? @map("deleted_at") @db.Timestamptz(3)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  addresses       Address[]
+  preference      CustomerPreference?
+  metric          CustomerMetric?
+  carts           Cart[]
+  wishlist        Wishlist?
+  orders          Order[]
+  subscriptions   Subscription[]
+  reviews         Review[]
+  consultations   RoutineConsultation[]
+  returnRequests  ReturnRequest[]
+  supportCases    SupportCase[]
+  consentRecords  ConsentRecord[]
+
+  @@index([roleId])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Address {
+  id                String   @id @default(cuid(2))
+  userId            String   @map("user_id")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label             String?
+  fullName          String   @map("full_name")
+  line1             String
+  line2             String?
+  city              String
+  region            String
+  postalCode        String   @map("postal_code")
+  country           String   @db.Char(2)
+  phone             String?
+  isDefaultShipping Boolean  @default(false) @map("is_default_shipping")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model CustomerPreference {
+  id                       String               @id @default(cuid(2))
+  userId                   String               @unique @map("user_id")
+  user                     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skinType                 SkinType?            @map("skin_type")
+  /// Concern slugs, ranked (index 0 = primary).
+  concerns                 String[]
+  sensitivity              Int?
+  reactions                String[]
+  isPregnantOrNursing      Boolean              @default(false) @map("is_pregnant_or_nursing")
+  usesPrescriptionTopicals Boolean              @default(false) @map("uses_prescription_topicals")
+  fragranceFree            Boolean              @default(false) @map("fragrance_free")
+  vegan                    Boolean              @default(false)
+  avoidIngredientIds       String[]             @map("avoid_ingredient_ids")
+  climate                  String?
+  sunExposure              String?              @map("sun_exposure")
+  routineTimePref          String?              @map("routine_time_pref")
+  monthlyBudgetCents       Int?                 @map("monthly_budget_cents")
+  sourceConsultationId     String?              @map("source_consultation_id")
+  sourceConsultation       RoutineConsultation? @relation(fields: [sourceConsultationId], references: [id], onDelete: SetNull)
+  createdAt                DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("customer_preferences")
+}
+
+model CustomerMetric {
+  userId              String    @id @map("user_id")
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ordersCount         Int       @default(0) @map("orders_count")
+  lifetimeValueCents  Int       @default(0) @map("lifetime_value_cents")
+  firstOrderAt        DateTime? @map("first_order_at") @db.Timestamptz(3)
+  lastOrderAt         DateTime? @map("last_order_at") @db.Timestamptz(3)
+  activeSubscriptions Int       @default(0) @map("active_subscriptions")
+  lifecycleStage      String    @map("lifecycle_stage")
+  computedAt          DateTime  @map("computed_at") @db.Timestamptz(3)
+
+  @@index([lifecycleStage])
+  @@index([lifetimeValueCents(sort: Desc)])
+  @@map("customer_metrics")
+}
+
+/// Append-only consent ledger; latest record per (subject, type) wins (review R-15).
+model ConsentRecord {
+  id            String      @id @default(cuid(2))
+  userId        String?     @map("user_id")
+  user          User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonymousId   String?     @map("anonymous_id")
+  type          ConsentType
+  granted       Boolean
+  policyVersion String      @map("policy_version")
+  source        String
+  ipHash        String?     @map("ip_hash")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId, type, createdAt(sort: Desc)])
+  @@index([anonymousId, type, createdAt(sort: Desc)])
+  @@map("consent_records")
+}

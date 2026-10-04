@@ -1,0 +1,93 @@
+// First-party analytics (ADR-0009, 08 §4.12).
+
+/// Monthly RANGE-partitioned on occurred_at (created in migration SQL; review R-19).
+/// Composite PK because a partitioned table's PK must include the partition key.
+model AnalyticsEvent {
+  id         BigInt   @default(autoincrement())
+  name       String
+  occurredAt DateTime @map("occurred_at") @db.Timestamptz(3)
+  /// Only set with analytics consent (review R-15).
+  sessionId  String?  @map("session_id")
+  /// Soft reference (no FK): the event store must never block user deletion.
+  userId     String?  @map("user_id")
+  path       String?
+  referrer   String?
+  properties Json     @default("{}")
+  utm        Json?
+  device     String?
+  country    String?  @db.Char(2)
+
+  @@id([id, occurredAt])
+  @@index([name, occurredAt])
+  @@index([sessionId])
+  @@map("analytics_events")
+}
+
+model DailyStoreMetric {
+  date                 DateTime @id @db.Date
+  sessions             Int      @default(0)
+  orders               Int      @default(0)
+  revenueCents         BigInt   @default(0) @map("revenue_cents")
+  discountCents        BigInt   @default(0) @map("discount_cents")
+  refundCents          BigInt   @default(0) @map("refund_cents")
+  newCustomers         Int      @default(0) @map("new_customers")
+  checkoutStarted      Int      @default(0) @map("checkout_started")
+  mrrCents             BigInt   @default(0) @map("mrr_cents")
+  activeSubscriptions  Int      @default(0) @map("active_subscriptions")
+  churnedSubscriptions Int      @default(0) @map("churned_subscriptions")
+  finderStarted        Int      @default(0) @map("finder_started")
+  finderCompleted      Int      @default(0) @map("finder_completed")
+  routineAddToCart     Int      @default(0) @map("routine_add_to_cart")
+  computedAt           DateTime @default(now()) @map("computed_at") @db.Timestamptz(3)
+
+  @@map("daily_store_metrics")
+}
+
+model DailyProductMetric {
+  date          DateTime @db.Date
+  variantId     String   @map("variant_id")
+  units         Int      @default(0)
+  revenueCents  BigInt   @default(0) @map("revenue_cents")
+  refundedUnits Int      @default(0) @map("refunded_units")
+  views         Int      @default(0)
+  addToCart     Int      @default(0) @map("add_to_cart")
+
+  @@id([date, variantId])
+  @@index([variantId, date])
+  @@map("daily_product_metrics")
+}
+
+model DailyFinderStepMetric {
+  date      DateTime @db.Date
+  stepId    String   @map("step_id")
+  source    String   @default("all")
+  reached   Int      @default(0)
+  completed Int      @default(0)
+  abandoned Int      @default(0)
+  avgMs     Int      @default(0) @map("avg_ms")
+
+  @@id([date, stepId, source])
+  @@map("daily_finder_step_metrics")
+}
+
+model DailyConcernMetric {
+  date          DateTime @db.Date
+  concernSlug   String   @map("concern_slug")
+  consultations Int      @default(0)
+  primaryCount  Int      @default(0) @map("primary_count")
+
+  @@id([date, concernSlug])
+  @@map("daily_concern_metrics")
+}
+
+model DailyCouponMetric {
+  date          DateTime @db.Date
+  couponId      String   @map("coupon_id")
+  redemptions   Int      @default(0)
+  discountCents BigInt   @default(0) @map("discount_cents")
+  revenueCents  BigInt   @default(0) @map("revenue_cents")
+
+  @@id([date, couponId])
+  @@index([couponId, date])
+  @@map("daily_coupon_metrics")
+}

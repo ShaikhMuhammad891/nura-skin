@@ -1,0 +1,382 @@
+// Cart, orders, payments, coupons, returns & support (08 §4.4–4.10, §4.14).
+
+model StripePrice {
+  id              String         @id @default(cuid(2))
+  variantId       String         @map("variant_id")
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  purchaseType    PurchaseType   @map("purchase_type")
+  intervalWeeks   Int?           @map("interval_weeks")
+  unitAmountCents Int            @map("unit_amount_cents")
+  stripeProductId String         @map("stripe_product_id")
+  stripePriceId   String         @unique @map("stripe_price_id")
+  active          Boolean        @default(true)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("stripe_prices")
+}
+
+model Cart {
+  id                        String     @id @default(cuid(2))
+  userId                    String?    @map("user_id")
+  user                      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                    CartStatus @default(ACTIVE)
+  couponId                  String?    @map("coupon_id")
+  coupon                    Coupon?    @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  /// Plan interval shared by all subscription lines (FR-CHK-08, review R-07).
+  subscriptionIntervalWeeks Int?       @map("subscription_interval_weeks")
+  currency                  String     @default("USD") @db.Char(3)
+  lastActivityAt            DateTime   @default(now()) @map("last_activity_at") @db.Timestamptz(3)
+  items                     CartItem[]
+  orders                    Order[]
+  createdAt                 DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([status, lastActivityAt])
+  @@map("carts")
+}
+
+model CartItem {
+  id             String               @id @default(cuid(2))
+  cartId         String               @map("cart_id")
+  cart           Cart                 @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId      String               @map("variant_id")
+  variant        ProductVariant       @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity       Int
+  purchaseType   PurchaseType         @default(ONE_TIME) @map("purchase_type")
+  consultationId String?              @map("consultation_id")
+  consultation   RoutineConsultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  routineTier    RoutineTier?         @map("routine_tier")
+  /// Price seen when added; drives the "price updated" notice (FR-CHK-07).
+  seenPriceCents Int?                 @map("seen_price_cents")
+  addedAt        DateTime             @default(now()) @map("added_at") @db.Timestamptz(3)
+
+  @@unique([cartId, variantId, purchaseType])
+  @@map("cart_items")
+}
+
+model Wishlist {
+  id         String         @id @default(cuid(2))
+  userId     String         @unique @map("user_id")
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareToken String?        @unique @map("share_token")
+  items      WishlistItem[]
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("wishlists")
+}
+
+model WishlistItem {
+  id         String          @id @default(cuid(2))
+  wishlistId String          @map("wishlist_id")
+  wishlist   Wishlist        @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String          @map("product_id")
+  product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId  String?         @map("variant_id")
+  variant    ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([wishlistId, productId])
+  @@map("wishlist_items")
+}
+
+model Order {
+  id                      String        @id @default(cuid(2))
+  /// Assigned at payment from order_number_seq (review R-12). Displayed as NURA-{number}.
+  number                  Int?          @unique
+  type                    OrderType     @default(STANDARD)
+  status                  OrderStatus   @default(PENDING_PAYMENT)
+  paymentStatus           PaymentStatus @default(PENDING) @map("payment_status")
+  userId                  String?       @map("user_id")
+  user                    User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Nullable until Stripe collects a guest's email (review R-11).
+  email                   String?       @db.Citext
+  cartId                  String?       @map("cart_id")
+  cart                    Cart?         @relation(fields: [cartId], references: [id], onDelete: SetNull)
+  cartHash                String?       @map("cart_hash")
+  /// Coupon applied when the order was created; redemption is recorded at payment (11 §6).
+  couponId                String?       @map("coupon_id")
+  coupon                  Coupon?       @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  subscriptionId          String?       @map("subscription_id")
+  subscription            Subscription? @relation("SubscriptionOrders", fields: [subscriptionId], references: [id], onDelete: SetNull)
+  currency                String        @default("USD") @db.Char(3)
+  subtotalCents           Int           @map("subtotal_cents")
+  discountCents           Int           @default(0) @map("discount_cents")
+  shippingCents           Int           @map("shipping_cents")
+  taxCents                Int           @default(0) @map("tax_cents")
+  totalCents              Int           @map("total_cents")
+  refundedCents           Int           @default(0) @map("refunded_cents")
+  shippingAddress         Json?         @map("shipping_address")
+  billingAddress          Json?         @map("billing_address")
+  shippingMethod          String?       @map("shipping_method")
+  stripeCheckoutSessionId String?       @unique @map("stripe_checkout_session_id")
+  stripePaymentIntentId   String?       @unique @map("stripe_payment_intent_id")
+  stripeInvoiceId         String?       @unique @map("stripe_invoice_id")
+  attribution             Json?
+  isDemo                  Boolean       @default(false) @map("is_demo")
+  needsAttention          Boolean       @default(false) @map("needs_attention")
+  attentionReason         String?       @map("attention_reason")
+  placedAt                DateTime?     @map("placed_at") @db.Timestamptz(3)
+  paidAt                  DateTime?     @map("paid_at") @db.Timestamptz(3)
+  canceledAt              DateTime?     @map("canceled_at") @db.Timestamptz(3)
+  version                 Int           @default(0)
+  createdAt               DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  items                 OrderItem[]
+  statusEvents          OrderStatusEvent[]
+  notes                 OrderNote[]
+  shipments             Shipment[]
+  payments              Payment[]
+  refunds               Refund[]
+  reservations          InventoryReservation[]
+  movements             InventoryMovement[]
+  couponRedemption      CouponRedemption?
+  returnRequests        ReturnRequest[]
+  supportCases          SupportCase[]
+  originOfSubscriptions Subscription[]         @relation("SubscriptionOrigin")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, paidAt])
+  @@index([email])
+  @@index([paidAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id               String          @id @default(cuid(2))
+  orderId          String          @map("order_id")
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId        String?         @map("variant_id")
+  variant          ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  productId        String?         @map("product_id")
+  product          Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName      String          @map("product_name")
+  variantName      String          @map("variant_name")
+  sku              String
+  imagePublicId    String?         @map("image_public_id")
+  purchaseType     PurchaseType    @map("purchase_type")
+  intervalWeeks    Int?            @map("interval_weeks")
+  quantity         Int
+  unitPriceCents   Int             @map("unit_price_cents")
+  discountCents    Int             @default(0) @map("discount_cents")
+  totalCents       Int             @map("total_cents")
+  refundedQuantity Int             @default(0) @map("refunded_quantity")
+  bundleParentId   String?         @map("bundle_parent_id")
+  bundleParent     OrderItem?      @relation("BundleComponents", fields: [bundleParentId], references: [id], onDelete: Cascade)
+  bundleComponents OrderItem[]     @relation("BundleComponents")
+  consultationId   String?         @map("consultation_id")
+  reviews          Review[]
+
+  @@index([orderId])
+  @@index([variantId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model OrderStatusEvent {
+  id         String       @id @default(cuid(2))
+  orderId    String       @map("order_id")
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus OrderStatus? @map("from_status")
+  toStatus   OrderStatus  @map("to_status")
+  actorId    String?      @map("actor_id")
+  /// webhook | admin | system | customer
+  source     String
+  note       String?
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_events")
+}
+
+model OrderNote {
+  id        String   @id @default(cuid(2))
+  orderId   String   @map("order_id")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  authorId  String   @map("author_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([orderId, createdAt])
+  @@map("order_notes")
+}
+
+model Shipment {
+  id             String    @id @default(cuid(2))
+  orderId        String    @map("order_id")
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  carrier        String
+  trackingNumber String    @map("tracking_number")
+  trackingUrl    String?   @map("tracking_url")
+  shippedAt      DateTime  @map("shipped_at") @db.Timestamptz(3)
+  deliveredAt    DateTime? @map("delivered_at") @db.Timestamptz(3)
+  createdById    String?   @map("created_by_id")
+
+  @@index([orderId])
+  @@map("shipments")
+}
+
+model Payment {
+  id                    String        @id @default(cuid(2))
+  orderId               String        @map("order_id")
+  order                 Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  provider              String        @default("stripe")
+  stripePaymentIntentId String?       @unique @map("stripe_payment_intent_id")
+  stripeChargeId        String?       @unique @map("stripe_charge_id")
+  stripeInvoiceId       String?       @map("stripe_invoice_id")
+  amountCents           Int           @map("amount_cents")
+  currency              String        @db.Char(3)
+  status                PaymentStatus
+  method                String?
+  cardBrand             String?       @map("card_brand")
+  cardLast4             String?       @map("card_last4")
+  receiptUrl            String?       @map("receipt_url")
+  failureCode           String?       @map("failure_code")
+  failureMessage        String?       @map("failure_message")
+  refunds               Refund[]
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+model Refund {
+  id             String          @id @default(cuid(2))
+  paymentId      String          @map("payment_id")
+  payment        Payment         @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  orderId        String          @map("order_id")
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  stripeRefundId String?         @unique @map("stripe_refund_id")
+  amountCents    Int             @map("amount_cents")
+  reason         String
+  note           String?
+  restock        Boolean         @default(false)
+  lines          Json?
+  status         RefundStatus    @default(PENDING)
+  initiatedById  String          @map("initiated_by_id")
+  returnRequests ReturnRequest[]
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([orderId])
+  @@map("refunds")
+}
+
+/// Inbound webhook idempotency: id = provider event id (ADR-0003).
+model WebhookEvent {
+  id          String    @id
+  provider    String
+  type        String
+  payload     Json
+  status      String    @default("received")
+  attempts    Int       @default(0)
+  error       String?   @db.Text
+  receivedAt  DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+
+  @@index([provider, type, receivedAt])
+  @@map("webhook_events")
+}
+
+model Coupon {
+  id                     String             @id @default(cuid(2))
+  code                   String             @unique @db.Citext
+  description            String?
+  type                   CouponType
+  valueBp                Int?               @map("value_bp")
+  valueCents             Int?               @map("value_cents")
+  minSubtotalCents       Int?               @map("min_subtotal_cents")
+  maxDiscountCents       Int?               @map("max_discount_cents")
+  /// all | categories | products | routines_only
+  appliesTo              String             @default("all") @map("applies_to")
+  eligibleCategoryIds    String[]           @map("eligible_category_ids")
+  eligibleProductIds     String[]           @map("eligible_product_ids")
+  appliesToSubscriptions Boolean            @default(false) @map("applies_to_subscriptions")
+  firstOrderOnly         Boolean            @default(false) @map("first_order_only")
+  exclusive              Boolean            @default(false)
+  maxRedemptions         Int?               @map("max_redemptions")
+  perCustomerLimit       Int                @default(1) @map("per_customer_limit")
+  redemptionCount        Int                @default(0) @map("redemption_count")
+  startsAt               DateTime?          @map("starts_at") @db.Timestamptz(3)
+  expiresAt              DateTime?          @map("expires_at") @db.Timestamptz(3)
+  campaign               String?
+  isActive               Boolean            @default(true) @map("is_active")
+  singleUseGenerated     Boolean            @default(false) @map("single_use_generated")
+  createdById            String?            @map("created_by_id")
+  archivedAt             DateTime?          @map("archived_at") @db.Timestamptz(3)
+  redemptions            CouponRedemption[]
+  carts                  Cart[]
+  orders                 Order[]
+  createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([isActive, expiresAt])
+  @@index([campaign])
+  @@map("coupons")
+}
+
+model CouponRedemption {
+  id            String   @id @default(cuid(2))
+  couponId      String   @map("coupon_id")
+  coupon        Coupon   @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  orderId       String   @unique @map("order_id")
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId        String?  @map("user_id")
+  email         String   @db.Citext
+  discountCents Int      @map("discount_cents")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([couponId, userId])
+  @@index([couponId, email])
+  @@map("coupon_redemptions")
+}
+
+model ReturnRequest {
+  id            String       @id @default(cuid(2))
+  orderId       String       @map("order_id")
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  userId        String       @map("user_id")
+  user          User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  supportCaseId String?      @map("support_case_id")
+  supportCase   SupportCase? @relation(fields: [supportCaseId], references: [id], onDelete: SetNull)
+  /// irritation | damaged | wrong_item | not_as_expected | other
+  reason        String
+  lines         Json
+  photos        String[]
+  status        ReturnStatus @default(REQUESTED)
+  refundId      String?      @map("refund_id")
+  refund        Refund?      @relation(fields: [refundId], references: [id], onDelete: SetNull)
+  decidedById   String?      @map("decided_by_id")
+  decidedAt     DateTime?    @map("decided_at") @db.Timestamptz(3)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@map("return_requests")
+}
+
+model SupportCase {
+  id             String            @id @default(cuid(2))
+  type           SupportCaseType
+  status         SupportCaseStatus @default(OPEN)
+  userId         String?           @map("user_id")
+  user           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email          String            @db.Citext
+  orderId        String?           @map("order_id")
+  order          Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  productId      String?           @map("product_id")
+  product        Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lotNumber      String?           @map("lot_number")
+  description    String            @db.Text
+  /// mild | moderate | serious (adverse events)
+  severity       String?
+  assigneeId     String?           @map("assignee_id")
+  resolution     String?           @db.Text
+  returnRequests ReturnRequest[]
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([status, type, createdAt])
+  @@map("support_cases")
+}

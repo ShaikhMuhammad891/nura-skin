@@ -1,0 +1,35 @@
+# dependencies
+node_modules
+.pnpm-store
+
+# next.js
+.next
+out
+next-env.d.ts
+
+# testing
+coverage
+playwright-report
+test-results
+blob-report
+
+# env: only .env.example is committed
+.env
+.env*.local
+.env.development
+.env.production
+
+# vercel
+.vercel
+
+# misc
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+*.log
+src/generated
+# generated from src/styles/tokens.json by `pnpm tokens` (runs before dev/build)
+src/styles/tokens.css
+
+# local embedded Postgres data (pnpm db:local)
+.local

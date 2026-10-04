@@ -1,0 +1,57 @@
+// Inventory: reservations + append-only ledger (ADR-0004, 08 §4.3).
+
+model InventoryItem {
+  id                String              @id @default(cuid(2))
+  variantId         String              @unique @map("variant_id")
+  variant           ProductVariant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  onHand            Int                 @default(0) @map("on_hand")
+  /// Sum of ACTIVE reservations, maintained in the same transaction.
+  reserved          Int                 @default(0)
+  lowStockThreshold Int                 @default(20) @map("low_stock_threshold")
+  version           Int                 @default(0)
+  movements         InventoryMovement[]
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("inventory_items")
+}
+
+/// Append-only: UPDATE/DELETE rejected by trigger.
+model InventoryMovement {
+  id              String                @id @default(cuid(2))
+  inventoryItemId String                @map("inventory_item_id")
+  inventoryItem   InventoryItem         @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  type            InventoryMovementType
+  /// Signed delta to on_hand.
+  quantity        Int
+  balanceAfter    Int                   @map("balance_after")
+  reason          String?
+  reference       String?
+  orderId         String?               @map("order_id")
+  order           Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  actorId         String?               @map("actor_id")
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([inventoryItemId, createdAt(sort: Desc)])
+  @@index([orderId])
+  @@map("inventory_movements")
+}
+
+/// Exactly one of order_id / subscription_id (CHECK). Renewal reservations: review R-09.
+model InventoryReservation {
+  id                 String            @id @default(cuid(2))
+  variantId          String            @map("variant_id")
+  variant            ProductVariant    @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  orderId            String?           @map("order_id")
+  order              Order?            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  subscriptionId     String?           @map("subscription_id")
+  subscription       Subscription?     @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoicePeriodStart DateTime?         @map("invoice_period_start") @db.Timestamptz(3)
+  quantity           Int
+  status             ReservationStatus @default(ACTIVE)
+  expiresAt          DateTime          @map("expires_at") @db.Timestamptz(3)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  resolvedAt         DateTime?         @map("resolved_at") @db.Timestamptz(3)
+
+  @@index([status, expiresAt])
+  @@map("inventory_reservations")
+}

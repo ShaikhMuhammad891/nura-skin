@@ -1,0 +1,185 @@
+// Nura Skin data model: docs/08-database-design.md is the source of truth.
+// Conventions: cuid2 string IDs, money in integer cents, basis points for percentages,
+// timestamptz everywhere, snake_case tables/columns via @@map/@map.
+// CHECK constraints, partial unique indexes and triggers live in hand-edited migration SQL
+// (see prisma/migrations/README.md): Prisma cannot model them.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleKey {
+  CUSTOMER
+  SUPPORT
+  MARKETING_MANAGER
+  INVENTORY_MANAGER
+  ADMIN
+  DEMO_STAFF
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProductType {
+  SINGLE
+  BUNDLE
+}
+
+enum RoutineSlot {
+  CLEANSE
+  TREAT
+  MOISTURIZE
+  PROTECT
+}
+
+enum TimeOfDay {
+  AM
+  PM
+  BOTH
+}
+
+enum SkinType {
+  DRY
+  OILY
+  COMBINATION
+  NORMAL
+}
+
+enum PurchaseType {
+  ONE_TIME
+  SUBSCRIPTION
+}
+
+enum CartStatus {
+  ACTIVE
+  CONVERTED
+  MERGED
+  ABANDONED
+}
+
+enum OrderType {
+  STANDARD
+  SUBSCRIPTION_RENEWAL
+}
+
+/// Fulfilment lifecycle (money lifecycle is PaymentStatus; review R-12 / 08 §4.6).
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  ACTIVE
+  PAUSED
+  PAST_DUE
+  CANCELED
+}
+
+enum InventoryMovementType {
+  INITIAL
+  RECEIVE
+  SALE
+  RETURN_RESTOCK
+  ADJUSTMENT
+  DAMAGE
+}
+
+enum ReservationStatus {
+  ACTIVE
+  COMMITTED
+  RELEASED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_SHIPPING
+}
+
+enum ConsultationStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum RecommendationEngine {
+  LLM
+  RULES_FALLBACK
+}
+
+enum RoutineTier {
+  ESSENTIAL
+  COMPLETE
+  ADVANCED
+}
+
+enum RationaleSource {
+  TEMPLATE
+  LLM
+}
+
+enum OutboxStatus {
+  PENDING
+  DISPATCHED
+  FAILED
+}
+
+enum SupportCaseType {
+  ADVERSE_EVENT
+  RETURN
+  GENERAL
+}
+
+enum SupportCaseStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+enum ConsentType {
+  HEALTH_DATA
+  MARKETING_EMAIL
+  ANALYTICS_COOKIE
+}

@@ -1,0 +1,135 @@
+// Reviews (08 §4.9) and the AI Routine Finder (08 §4.11, 12).
+
+model Review {
+  id              String       @id @default(cuid(2))
+  productId       String       @map("product_id")
+  product         Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId          String?      @map("user_id")
+  user            User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orderItemId     String?      @map("order_item_id")
+  orderItem       OrderItem?   @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  rating          Int
+  title           String
+  body            String       @db.Text
+  skinType        SkinType?    @map("skin_type")
+  concerns        String[]
+  usageDuration   String?      @map("usage_duration")
+  wouldRecommend  Boolean      @map("would_recommend")
+  status          ReviewStatus @default(PENDING)
+  moderationFlags String[]     @map("moderation_flags")
+  rejectionReason String?      @map("rejection_reason")
+  isFeatured      Boolean      @default(false) @map("is_featured")
+  helpfulCount    Int          @default(0) @map("helpful_count")
+  displayName     String       @map("display_name")
+  moderatedById   String?      @map("moderated_by_id")
+  moderatedAt     DateTime?    @map("moderated_at") @db.Timestamptz(3)
+  images          ReviewImage[]
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([productId, userId])
+  @@index([productId, status, createdAt(sort: Desc)])
+  @@index([productId, status, rating])
+  @@index([status, createdAt])
+  @@map("reviews")
+}
+
+model ReviewImage {
+  id       String @id @default(cuid(2))
+  reviewId String @map("review_id")
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  publicId String @map("public_id")
+  width    Int
+  height   Int
+  alt      String
+  position Int    @default(0)
+
+  @@index([reviewId])
+  @@map("review_images")
+}
+
+model RoutineConsultation {
+  id                   String                @id @default(cuid(2))
+  userId               String?               @map("user_id")
+  user                 User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonymousId          String?               @map("anonymous_id")
+  status               ConsultationStatus    @default(IN_PROGRESS)
+  source               String?
+  parentId             String?               @map("parent_id")
+  parent               RoutineConsultation?  @relation("ConsultationLineage", fields: [parentId], references: [id], onDelete: SetNull)
+  children             RoutineConsultation[] @relation("ConsultationLineage")
+  questionnaireVersion String                @map("questionnaire_version")
+  answers              Json                  @default("{}")
+  lastStep             String?               @map("last_step")
+  profile              Json?
+  safetyFlags          String[]              @map("safety_flags")
+  engine               RecommendationEngine?
+  promptVersion        String?               @map("prompt_version")
+  model                String?
+  candidateSnapshot    Json?                 @map("candidate_snapshot")
+  llmRawOutput         Json?                 @map("llm_raw_output")
+  fallbackReason       String?               @map("fallback_reason")
+  latencyMs            Int?                  @map("latency_ms")
+  inputTokens          Int?                  @map("input_tokens")
+  outputTokens         Int?                  @map("output_tokens")
+  completedAt          DateTime?             @map("completed_at") @db.Timestamptz(3)
+  claimedAt            DateTime?             @map("claimed_at") @db.Timestamptz(3)
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recommendations RoutineRecommendation[]
+  cartItems       CartItem[]
+  subscriptions   Subscription[]
+  preferences     CustomerPreference[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([anonymousId])
+  @@index([status, createdAt])
+  @@index([engine, createdAt])
+  @@map("routine_consultations")
+}
+
+model RoutineRecommendation {
+  id               String              @id @default(cuid(2))
+  consultationId   String              @map("consultation_id")
+  consultation     RoutineConsultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  tier             RoutineTier
+  title            String
+  summary          String              @db.Text
+  introductionPlan Json                @map("introduction_plan")
+  excludedProducts Json                @map("excluded_products")
+  totalCents       Int                 @map("total_cents")
+  isRecommended    Boolean             @default(false) @map("is_recommended")
+  steps            RoutineStep[]
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([consultationId, tier])
+  @@map("routine_recommendations")
+}
+
+model RoutineStep {
+  id                    String                @id @default(cuid(2))
+  recommendationId      String                @map("recommendation_id")
+  recommendation        RoutineRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  timeOfDay             TimeOfDay             @map("time_of_day")
+  slot                  RoutineSlot
+  stepOrder             Int                   @map("step_order")
+  productId             String                @map("product_id")
+  product               Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// Null only while requires_variant_choice (tinted SPF shade; review R-23).
+  variantId             String?               @map("variant_id")
+  variant               ProductVariant?       @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  requiresVariantChoice Boolean               @default(false) @map("requires_variant_choice")
+  rationale             String                @db.Text
+  rationaleSource       RationaleSource       @default(TEMPLATE) @map("rationale_source")
+  usage                 String
+  frequency             String
+  matchedConcerns       String[]              @map("matched_concerns")
+  score                 Int
+  swappedFromId         String?               @map("swapped_from_id")
+  swappedFrom           RoutineStep?          @relation("StepSwaps", fields: [swappedFromId], references: [id], onDelete: SetNull)
+  swappedTo             RoutineStep[]         @relation("StepSwaps")
+
+  @@unique([recommendationId, timeOfDay, stepOrder])
+  @@map("routine_steps")
+}
