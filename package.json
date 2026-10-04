@@ -4,13 +4,13 @@
   "private": true,
   "description": "Nura Skin: AI-personalized skincare commerce platform",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "22.x"
   },
   "packageManager": "pnpm@12.6.0",
   "scripts": {
     "predev": "tsx scripts/generate-tokens.ts",
     "dev": "next dev",
-    "prebuild": "tsx scripts/generate-tokens.ts",
+    "prebuild": "prisma generate && tsx scripts/generate-tokens.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
