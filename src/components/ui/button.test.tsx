@@ -30,11 +30,11 @@ describe("Button", () => {
   it("asChild renders the child element with button styles", () => {
     render(
       <Button asChild variant="accent">
-        <a href="/finder">Find my routine</a>
+        <a href="https://example.com/docs">Find my routine</a>
       </Button>,
     );
     const link = screen.getByRole("link", { name: "Find my routine" });
-    expect(link).toHaveAttribute("href", "/finder");
+    expect(link).toHaveAttribute("href", "https://example.com/docs");
     expect(link.className).toContain("bg-accent");
   });
 });

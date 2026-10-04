@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { readGuestCartId } from "@/features/cart/server/cart-cookie";
 import { mergeGuestCart } from "@/features/cart/server/service";
+import { readAnonymousId } from "@/features/finder/server/consult-cookie";
+import { claimGuestConsultations } from "@/features/finder/server/service";
 import { claimOrdersByVerifiedEmail, upsertFromClerk } from "@/features/users/server/service";
 import { GUEST_COOKIES, safeNextPath } from "@/lib/auth-gate";
 import { getCurrentClerkIdentity } from "@/lib/server/clerk";
@@ -30,6 +32,11 @@ export async function GET(request: NextRequest) {
       if (guestCartId) {
         const result = await mergeGuestCart(db, guestCartId, user.id);
         log.info({ userId: user.id, ...result }, "guest cart claimed");
+      }
+      const anonymousId = await readAnonymousId();
+      if (anonymousId) {
+        const claimed = await claimGuestConsultations(db, anonymousId, user.id);
+        if (claimed > 0) log.info({ userId: user.id, claimed }, "guest consultations claimed");
       }
       // Only a verified email may claim guest orders (prevents order-history takeover, 10 §4.3).
       if (identity.emailVerified && identity.email) {

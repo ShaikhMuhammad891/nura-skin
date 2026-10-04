@@ -24,3 +24,4 @@ Format: [MADR-lite](https://adr.github.io/madr/). One decision per file, immutab
 | [0018](0018-toolchain-versions.md)                        | Toolchain & framework versions                                       | Proposed (pending first install)         |
 | [0019](0019-local-postgres-and-pg-adapter.md)             | Embedded Postgres for dev/test; node-postgres adapter at runtime     | Accepted                                 |
 | [0020](0020-storefront-rendering-and-catalogue.md)        | Storefront rendering, real status codes, in-memory catalogue         | Accepted                                 |
+| [0021](0021-finder-rules-engine-first.md)                 | Ship the Routine Finder on the rules engine first                    | Accepted                                 |

@@ -1,11 +1,11 @@
 /**
- * Storefront navigation (docs/13 §6.4). Routes land progressively:
- * shop/routines/ingredients in M3, the finder in M6. The designed 404 covers them until then.
+ * Storefront navigation (docs/13 §6.4).
  */
 export type NavItem = { label: string; href: string };
 
 export const mainNav: NavItem[] = [
   { label: "Shop", href: "/shop" },
+  { label: "Routine finder", href: "/finder" },
   { label: "Routines", href: "/routines" },
   { label: "Ingredients", href: "/ingredients" },
   { label: "Science", href: "/science" },

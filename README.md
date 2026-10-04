@@ -1,18 +1,15 @@
 # Nura Skin
 
 AI-personalized skincare commerce platform: a portfolio-grade Next.js build.
+**Current progress: [`docs/STATUS.md`](docs/STATUS.md)** (what is built, live, and next).
+
 The full specification lives in [`docs/`](docs/README.md) (start with `01-product-requirements.md` and `23-architecture-review.md`).
 
 ## Status
 
-| Milestone      | State                                                                                                                                                                                                          |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0 Foundations | ✅ Lint, typecheck, 72 unit tests, build, 11 E2E (Chromium + iPhone WebKit, axe light/dark)                                                                                                                    |
-| M1 Data layer  | ✅ Prisma 7.10 schema (64 tables), migration + hand-written constraints/triggers, idempotent seed, 17 DB integration tests                                                                                     |
-| Domain core    | ✅ Pricing engine, coupon rules, order/subscription state machines, finder engine (deterministic core + selection validator)                                                                                   |
-| Server core    | ✅ Inventory (reservations, ledger, row locks; 50-buyers/20-units test), cart service + Server Actions, order lifecycle (pending → paid idempotently → expired/cancelled), outbox, audit log, finder DB loader |
-| Tests          | 207 unit · 60 integration (real Postgres) · 11 E2E                                                                                                                                                             |
-| M2 Auth        | ⏳ needs Clerk keys                                                                                                                                                                                            |
+Live at **https://nura-skin-1fzq.vercel.app**. Storefront, auth, Stripe checkout and the Routine
+Finder are built; cart polish, account, admin and subscriptions are next. Details, environment and
+the session log: **[`docs/STATUS.md`](docs/STATUS.md)**.
 
 Stack: Next.js 16.3 · React 19.3 · TypeScript 6.0 · Tailwind CSS 4.3 · Vitest 5 · Playwright 1.63. Version rationale: [ADR-0018](docs/adr/0018-toolchain-versions.md).
 
