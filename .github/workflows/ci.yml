@@ -22,7 +22,7 @@ env:
   COOKIE_SECRET: ci-only-cookie-secret-0123456789abcdef
   # Clerk development instance (repo secrets). The fallbacks only satisfy build-time validation;
   # E2E sign-in flows need the real secrets.
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || 'pk_test_Y2kuY2xlcmsuYWNjb3VudHMuZGV2JA' }}
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || 'pk_test_Y2kuY2xlcmsuYWNjb3VudHMuZGV2JA' }} # gitleaks:allow (fake placeholder; publishable keys are public)
   CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_ci_placeholder' }}
   # Stripe test mode (repo secrets); same fallback rule as Clerk.
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY || 'pk_test_ci_placeholder' }}

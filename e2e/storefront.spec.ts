@@ -7,7 +7,10 @@ test.describe("@storefront browse", () => {
     await page.goto("/shop");
     await expect(page.getByRole("heading", { level: 1, name: "Shop all" })).toBeVisible();
 
-    const status = page.getByRole("status").filter({ hasText: /products?$/ }).first();
+    const status = page
+      .getByRole("status")
+      .filter({ hasText: /products?$/ })
+      .first();
     const before = Number((await status.textContent())?.split(" ")[0]);
 
     // Facets are plain links, so this works with or without JavaScript.
@@ -16,7 +19,9 @@ test.describe("@storefront browse", () => {
       .first()
       .click();
     await expect(page).toHaveURL(/pref=fragrance-free/);
-    await expect(page.getByRole("link", { name: /Fragrance-free \(remove filter\)/ })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Fragrance-free \(remove filter\)/ }),
+    ).toBeVisible();
     const after = Number((await status.textContent())?.split(" ")[0]);
     expect(after).toBeLessThanOrEqual(before);
 
